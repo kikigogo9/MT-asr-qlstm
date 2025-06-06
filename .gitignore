@@ -1,0 +1,6 @@
+**/__pycache__
+/data
+/datasets
+/saved
+*.pkl
+/kristian-experiment
