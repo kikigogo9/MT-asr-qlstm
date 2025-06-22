@@ -105,7 +105,7 @@ class QLSTM(keras.layers.Layer):
                 # Entanglement
                 for i in range(self.wires):
                     qml.CNOT([i, (i+1) % self.wires])
-                        # Entaglement every other one
+                # Entaglement to every other qubit
                 for i in range(self.wires):
                     qml.CNOT([i, (i+2) % self.wires])
                 for i in range(self.wires):

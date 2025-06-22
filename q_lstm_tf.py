@@ -37,6 +37,7 @@ class QLSTM(keras.layers.Layer):
 
         self.circuit = self.__get_circuit()
         shapes = {'weights': (self.layers, 3*self.wires)}
+        self.shapes = shapes
         self.qlayers = [qml.qnn.KerasLayer(self.circuit, shapes, output_dim=self.wires),
             qml.qnn.KerasLayer(self.circuit, shapes, output_dim=self.wires),
             qml.qnn.KerasLayer(self.circuit, shapes, output_dim=self.wires),
@@ -47,11 +48,11 @@ class QLSTM(keras.layers.Layer):
 
         self.feature_combiner = keras.layers.Dense(self.wires, dtype=dtype_global)
         self.out_dense = keras.layers.Dense(self.units, dtype=dtype_global)
+        self.__set_feature_function(self.feature_type)
 
 
     def build(self, input_shape):
         # Initialize Circuit embedding function
-        self.__set_feature_function(self.feature_type)
         super().build(input_shape)
 
     def __set_feature_function(self, feature_type='atan'):
@@ -107,9 +108,6 @@ class QLSTM(keras.layers.Layer):
                 # Entanglement
                 for i in range(self.wires):
                     qml.CNOT([i, (i+1) % self.wires])
-                        # Entaglement every other one
-#                for i in range(self.wires):
-#                    qml.CNOT([i, (i+2) % self.wires])
                 for i in range(self.wires):
                     qml.RX(weights[layer, 3*i + 0], i)
                     qml.RY(weights[layer, 3*i + 1], i)

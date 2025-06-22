@@ -27,14 +27,17 @@ os.environ["OMP_PROC_BIND"] = "false"
 import keras
 import tensorflow as tf
 import pennylane as qml
-from q_lstm_tf import QLSTM
-from q_lstm_tf_v2 import QLSTM as QLSTM_V2
-from q_lstm_tf_v2_data_reuploaded import QLSTM as QLSTM_REUPLOAD
+from q_lstm_tf import QLSTM as B_QLSTM
+from q_lstm_tf_v2 import QLSTM as LE_QLSTM
+from q_lstm_tf_v2_data_reuploaded import QLSTM as R_QLSTM
 from q_lstm_tf_v2_data_reuploaded import BiQLSTM
 from model_saver import DEFAUTL_MODEL_DICT, ModelSaver
 from lbfgs_trainer import Lbfgs
 from keras.layers import *
 tf.keras.backend.set_floatx('float64')
+
+seed = 42
+tf.random.set_seed(seed)
 
 path = f"qlstm.q{qubits}.lr{learning_rate}.v{version}.l{layers}.pkl"
 
@@ -49,8 +52,8 @@ if file_path.exists():
     printable = ['loss', 'accuracy', 'best_loss', 'best_score']
     with open(file_path, 'rb') as file:
         model_dict = pickle.load(file)
-        model_weights = model_dict['best_model']
-        #optim_state = model_dict['optim_state']
+        model_weights = model_dict['current_model']
+        optim_state = model_dict['optim_state']
         for key in printable:
             if key in model_dict:
                 print(key, model_dict[key])
@@ -64,11 +67,11 @@ if bidirectional == 'yes':
 else:
     if version == "reupload":
         print(version)
-        qlstm = QLSTM_REUPLOAD(32, return_sequences=True, wires=qubits, layers=layers, dev=dev)
+        qlstm = R_QLSTM(32, return_sequences=True, wires=qubits, layers=layers, dev=dev)
     elif version == "v2":
-        qlstm = QLSTM_V2(32, return_sequences=True, wires=qubits, layers=layers, dev=dev)
+        qlstm = LE_QLSTM(32, return_sequences=True, wires=qubits, layers=layers, dev=dev)
     else:
-        qlstm = QLSTM(32, return_sequences=True, wires=qubits, layers=layers, dev=dev)
+        qlstm = B_QLSTM(32, return_sequences=True, wires=qubits, layers=layers, dev=dev)
 
 number_of_classes = 8
 EPOCHS = 1
@@ -93,6 +96,7 @@ model.compile(
     loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
     metrics=['accuracy']
 )
+
 
 print(model.summary())
 
@@ -130,15 +134,16 @@ train_spectrogram_ds = train_spectrogram_ds.cache().shuffle(10000).prefetch(tf.d
 val_spectrogram_ds = val_spectrogram_ds.cache().prefetch(tf.data.AUTOTUNE)
 test_spectrogram_ds = test_spectrogram_ds.cache().prefetch(tf.data.AUTOTUNE)
 
-model.evaluate(test_spectrogram_ds.cache().take(1))
+# model.evaluate(test_spectrogram_ds.cache().take(1))
 
+if optim_state is not None:
+    print("Loading optim state ...")
+    model.train_on_batch(tf.zeros((1, 55, 13)), tf.zeros((1, 1)))  # one dummy train step
+    model.optimizer.set_weights(optim_state)
 if model_weights is not None:
     print("Loading weights ...")
     ## hack for loading weights
     model.set_weights(model_weights)
-if optim_state is not None:
-    print("Loading optim state ...")
-    model.optimizer.set_weights(optim_state)
     
 # with open('test-' + path, 'wb') as file:
         
@@ -152,7 +157,7 @@ history = model.fit(
     validation_data=val_spectrogram_ds,
     epochs=EPOCHS,
     callbacks=[
-        #keras.callbacks.EarlyStopping(verbose=1, patience=2),
+        keras.callbacks.EarlyStopping(verbose=1, patience=2),
         model_saver
         ],
 )
